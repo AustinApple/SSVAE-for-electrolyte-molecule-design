@@ -1,19 +1,14 @@
 # this is the run script for our own data(MP and zinc), try to predict IE and EA 
 from __future__ import print_function
 import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 1
-config.gpu_options.allow_growth = True
 import numpy as np 
 import sys
 np.set_printoptions(threshold=sys.maxsize)
 import pandas as pd
-from preprocessing import smiles_to_seq, vectorize
-import SSVAE_reload
-
-from preprocessing import get_property, canonocalize
+from molecule_feature_prediction.feature import molecules
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error
+import SSVAE
 
 
 beta=10000.
@@ -26,96 +21,47 @@ char_set=[" ", "@", "H", "N", "S", "o", "i", "6", "I", "]", "P", "5", ")", "4", 
 
 
 
-#data_uri='./data/ZINC_310k.csv'
-data_MP = './MP_new_canonize_cut.csv'
-data_zinc = './data_size_test/30W.csv'
+ls_smi_MP = pd.read_csv('MP_clean_canonize_cut.csv')['smiles'].tolist()
+ls_smi_zinc = pd.read_csv('zinc_30W.csv')['smiles'].tolist()
+arr_IE = pd.read_csv('MP_clean_canonize_cut.csv')[['IE','EA']].values
 
-save_uri='./test_MP_zinc_40W.ckpt'
+X_L, Xs_L, ls_smi_MP_new = molecules(ls_smi_MP).one_hot_RNN(char_set=char_set)
+print(X_L.shape[0],len(ls_smi_MP_new))
 
-# I think the smiles in last 2000 smiles has problem
-frac_val=0.1      # fraction for valuation  0.01 ok 0.1 ok
-ntst=2000           #  number of data for test in MP  ==1000 and zinc 300000 == problem
-n_zinc=300000 #  number of zinc data (unlabel data)
-
-data = pd.read_csv(data_MP)
+X_U, Xs_U, ls_smi_zinc_new = molecules(ls_smi_zinc).one_hot_RNN(char_set=char_set)
+print(X_U.shape[0],len(ls_smi_zinc_new))
 
 np.random.seed(0)
-random_id = np.random.permutation(data.shape[0])
-# np.save("seed_1_test_idx",random_id[-ntst:])
+perm_L = np.random.permutation(X_L.shape[0])
+np.random.seed(0)
+perm_U = np.random.permutation(X_U.shape[0])
 
-data = data.iloc[random_id,:]
+trnX_L, valX_L, tstX_L = np.split(X_L[perm_L], [int(len(X_L)*0.8), int(len(X_L)*0.9)])
+trnXs_L, valXs_L, tstXs_L = np.split(Xs_L[perm_L], [int(len(Xs_L)*0.8), int(len(X_L)*0.9)])
+trnY_L, valY_L, tstY_L = np.split(arr_IE[perm_L], [int(len(arr_IE)*0.8), int(len(arr_IE)*0.9)])
+print(trnY_L.shape)
 
-smiles_MP = data.as_matrix()[:,0] #0: SMILES
-smiles_zinc = pd.read_csv(data_zinc).as_matrix()[:n_zinc,0]
-smiles = np.concatenate((smiles_MP, smiles_zinc), axis=0)
-    
-
-# data preparation
-print('::: data preparation')
-
-
-Y = np.asarray(data.as_matrix()[:,1:], dtype=np.float32)  # 1.IE   2.EA 
-
-end_index_MP = smiles_MP.shape[0]   # before this number is MP, after is zinc 
-# data preparation
-
-list_seq = smiles_to_seq(smiles, char_set)
-
-
-Xs, X=vectorize(list_seq, char_set)
-
-tstX=X[end_index_MP-ntst:end_index_MP]
-tstXs=Xs[end_index_MP-ntst:end_index_MP]
-tstY=Y[end_index_MP-ntst:end_index_MP]
-
-
-nL=int(len(Y)-ntst)       # subtract the number of test set 
-nU=int(n_zinc)            # symbol the number of zinc data (unlabeled)  
-nL_trn=int(nL*(1-frac_val))  
-nL_val=int(nL*frac_val)
-nU_trn=int(nU*(1-frac_val))
-nU_val=int(nU*frac_val)
-
-perm_id_nL=np.random.permutation(nL)
-perm_id_nU=np.random.permutation([i for i in range(end_index_MP,len(X))])
-# do not do permutation
-# perm_id_nL=np.array([i for i in range(nL)])
-# perm_id_nU=np.array([i for i in range(end_index_MP,len(X))])
-print(perm_id_nU[:10])
-print(perm_id_nU[:10])
-
-trnX_L=X[perm_id_nL[:nL_trn]]
-trnXs_L=Xs[perm_id_nL[:nL_trn]]
-trnY_L=Y[perm_id_nL[:nL_trn]]
-
-valX_L=X[perm_id_nL[nL_trn:nL_trn+nL_val]]
-valXs_L=Xs[perm_id_nL[nL_trn:nL_trn+nL_val]]
-valY_L=Y[perm_id_nL[nL_trn:nL_trn+nL_val]]
-
-trnX_U=X[perm_id_nU[:nU_trn]]
-trnXs_U=Xs[perm_id_nU[:nU_trn]]
-
-valX_U=X[perm_id_nU[nU_trn:nU_trn+nU_val]]
-valXs_U=Xs[perm_id_nU[nU_trn:nU_trn+nU_val]]
+trnX_U, valX_U, tstX_U = np.split(X_U[perm_U], [int(len(X_U)*0.8), int(len(X_U)*0.9)])
+trnXs_U, valXs_U, tstXs_U = np.split(Xs_U[perm_U], [int(len(Xs_U)*0.8), int(len(Xs_U)*0.9)])
 
 scaler_Y = StandardScaler()
-scaler_Y.fit(Y)
+scaler_Y.fit(arr_IE)
 trnY_L=scaler_Y.transform(trnY_L)
 valY_L=scaler_Y.transform(valY_L)
 
 ## model training
 print('::: model training')
 
-seqlen_x = X.shape[1]
-dim_x = X.shape[2]
-dim_y = Y.shape[1]
+seqlen_x = trnX_L.shape[1]
+dim_x = trnX_L.shape[2]
+dim_y = trnY_L.shape[1]
 dim_z = 100
 dim_h = 250
 
 n_hidden = 3
 batch_size = 200
 
-model = SSVAE_reload.Model(seqlen_x = seqlen_x, dim_x = dim_x, dim_y = dim_y, dim_z = dim_z, dim_h = dim_h,
+model = SSVAE.Model(seqlen_x = seqlen_x, dim_x = dim_x, dim_y = dim_y, dim_z = dim_z, dim_h = dim_h,
                     n_hidden = n_hidden, batch_size = batch_size, beta = float(beta), char_set = char_set)
 
 with model.session:
@@ -127,11 +73,11 @@ with model.session:
     
     # property prediction performance
    
-    tstY_hat=scaler_Y.inverse_transform(model.predict(tstX))
+    tstY_hat=scaler_Y.inverse_transform(model.predict(tstX_L))
     
 
     for j in range(dim_y):
-        print([j, mean_absolute_error(tstY[:,j], tstY_hat[:,j])])
+        print([j, mean_absolute_error(tstY_L[:,j], tstY_hat[:,j])])
 
 
     # model.reload(trnX_L=trnX_L, trnXs_L=trnXs_L, trnY_L=trnY_L, trnX_U=trnX_U, trnXs_U=trnXs_U,

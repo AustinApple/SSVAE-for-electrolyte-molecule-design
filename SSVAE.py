@@ -75,10 +75,8 @@ class Model(object):
         
 
     def train(self, trnX_L, trnXs_L, trnY_L, trnX_U, trnXs_U, valX_L, valXs_L, valY_L, valX_U, valXs_U):
-
-        self.mu_prior=np.mean(trnY_L,0)   
-        self.cov_prior=np.cov(trnY_L.T)     
-
+        self.mu_prior=np.mean(trnY_L,0) 
+        self.cov_prior=np.cov(trnY_L.T)
         self.tf_mu_prior=tf.constant(self.mu_prior, shape=[1, self.dim_y], dtype=tf.float32)   
         self.tf_cov_prior=tf.constant(self.cov_prior, shape=[self.dim_y, self.dim_y], dtype=tf.float32)
 
@@ -100,7 +98,7 @@ class Model(object):
 
         batch_size_L=int(self.batch_size*len(trnX_L)/(len(trnX_L)+len(trnX_U)))
         batch_size_U=int(self.batch_size*len(trnX_U)/(len(trnX_L)+len(trnX_U)))
-        n_batch=int(len(trnX_L)/batch_size_L) 
+        n_batch=min(int(len(trnX_U)/batch_size_U),int(len(trnX_L)/batch_size_L))
         print(n_batch)
         batch_size_val_L=int(len(valX_L)/10)
         batch_size_val_U=int(len(valX_U)/10)
@@ -182,8 +180,14 @@ class Model(object):
                 break
         
 
-
-
+    def load_model(self, model_name):    
+        # self.mu_prior=np.mean(Y,0)   
+        # self.cov_prior=np.cov(Y.T)
+        with self.session.as_default() as sess:
+            sess.run(tf.global_variables_initializer())
+            saver = tf.train.import_meta_graph(model_name+'.meta')
+            saver.restore(sess,model_name)
+    
     def predict(self, x_input):
 
         return self.session.run(self.y_U_mu, feed_dict = {self.x_U: x_input})
@@ -313,9 +317,8 @@ class Model(object):
 
     def noniso_logpdf(self, x):
         return - 0.5 * (float(self.cov_prior.shape[0]) * np.log(2.*np.pi) +  np.log(np.linalg.det(self.cov_prior))
-                        + tf.reduce_sum( tf.multiply( tf.matmul( tf.subtract(x, self.tf_mu_prior), tf.matrix_inverse(self.tf_cov_prior) ), tf.subtract(x, self.tf_mu_prior) ), 1) )
-
-
+                      + tf.reduce_sum( tf.multiply( tf.matmul( tf.subtract(x, self.tf_mu_prior), tf.matrix_inverse(self.tf_cov_prior) ), tf.subtract(x, self.tf_mu_prior) ), 1) )
+    
     def noniso_KLD(self, mu, log_sigma_sq):
         return 0.5 * ( tf.trace( tf.scan(lambda a, x: tf.matmul(tf.matrix_inverse(self.tf_cov_prior), x), tf.matrix_diag(tf.exp(log_sigma_sq)) ) ) 
                       + tf.reduce_sum( tf.multiply( tf.matmul( tf.subtract(self.tf_mu_prior, mu), tf.matrix_inverse(self.tf_cov_prior) ), tf.subtract(self.tf_mu_prior, mu) ), 1)
@@ -363,6 +366,7 @@ class Model(object):
             cell_bw = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.GRUCell(dim_h) for _ in range(self.n_hidden)])
             init_state_fw = tf.layers.dense(st, dim_h, activation = tf.nn.sigmoid)
             init_state_bw = tf.layers.dense(st, dim_h, activation = tf.nn.sigmoid)
+
             peek_in = tf.layers.dense(st, self.dim_x, activation = tf.nn.sigmoid)
             peek = tf.reshape(tf.tile(peek_in, [1, self.seqlen_x]), [-1, self.seqlen_x, self.dim_x])
             
