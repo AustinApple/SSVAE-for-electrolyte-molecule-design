@@ -104,7 +104,7 @@ class Model(object):
         batch_size_val_U=int(len(valX_U)/10)
         
         with tf.name_scope('Cost'):
-            cost = (objL * float(batch_size_L) + objU * float(batch_size_U))/float(batch_size_L+batch_size_U) + float(batch_size_L)/float(batch_size_L+batch_size_U) * (self.beta * objYpred_MSE)
+            cost = (objL * float(batch_size_L)/float(batch_size_L+batch_size_U) + objU * float(batch_size_U))/float(batch_size_L+batch_size_U) + float(batch_size_L)/float(batch_size_L+batch_size_U) * (self.beta * objYpred_MSE)
             
         cost_val = objYpred_MSE
         train_op = tf.train.AdamOptimizer().minimize(cost)
@@ -129,7 +129,7 @@ class Model(object):
         
         summary_merge_trn = tf.summary.merge([summary_cost, summary_objL, summary_objU, summary_objYpred_MSE])
         summary_merge_val = tf.summary.merge([summary_objL_val, summary_objU_val, summary_objYpred_MSE_val])
-        writer = tf.summary.FileWriter("Tensorboard_test/", graph=self.session.graph)
+        writer = tf.summary.FileWriter("Tensorboard_test_B_100000/", graph=self.session.graph)
 
         # training
         val_log=np.zeros(300)
@@ -180,9 +180,9 @@ class Model(object):
                 break
         
 
-    def load_model(self, model_name):    
-        # self.mu_prior=np.mean(Y,0)   
-        # self.cov_prior=np.cov(Y.T)
+    def load_model(self, model_name, Y):    
+        self.mu_prior=np.mean(Y,0)   
+        self.cov_prior=np.cov(Y.T)
         with self.session.as_default() as sess:
             sess.run(tf.global_variables_initializer())
             saver = tf.train.import_meta_graph(model_name+'.meta')

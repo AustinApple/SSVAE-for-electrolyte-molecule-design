@@ -11,7 +11,7 @@ from sklearn.metrics import mean_absolute_error
 import SSVAE
 
 
-beta=10000.
+beta=100000.
  
 # include only fourty 39 characters
 char_set=[" ", "@", "H", "N", "S", "o", "i", "6", "I", "]", "P", "5", ")", "4", "8", "B", "F", 
@@ -25,11 +25,11 @@ ls_smi_MP = pd.read_csv('MP_clean_canonize_cut.csv')['smiles'].tolist()
 ls_smi_zinc = pd.read_csv('zinc_30W.csv')['smiles'].tolist()
 arr_IE = pd.read_csv('MP_clean_canonize_cut.csv')[['IE','EA']].values
 
-X_L, Xs_L, ls_smi_MP_new = molecules(ls_smi_MP).one_hot_RNN(char_set=char_set)
-print(X_L.shape[0],len(ls_smi_MP_new))
+Xs_L, X_L = molecules(ls_smi_MP).one_hot_RNN(char_set=char_set)
+# print(X_L.shape[0],len(ls_smi_MP_new))
 
-X_U, Xs_U, ls_smi_zinc_new = molecules(ls_smi_zinc).one_hot_RNN(char_set=char_set)
-print(X_U.shape[0],len(ls_smi_zinc_new))
+Xs_U, X_U = molecules(ls_smi_zinc).one_hot_RNN(char_set=char_set)
+# print(X_U.shape[0],len(ls_smi_zinc_new))
 
 np.random.seed(0)
 perm_L = np.random.permutation(X_L.shape[0])
@@ -37,7 +37,7 @@ np.random.seed(0)
 perm_U = np.random.permutation(X_U.shape[0])
 
 trnX_L, valX_L, tstX_L = np.split(X_L[perm_L], [int(len(X_L)*0.8), int(len(X_L)*0.9)])
-trnXs_L, valXs_L, tstXs_L = np.split(Xs_L[perm_L], [int(len(Xs_L)*0.8), int(len(X_L)*0.9)])
+trnXs_L, valXs_L, tstXs_L = np.split(Xs_L[perm_L], [int(len(Xs_L)*0.8), int(len(Xs_L)*0.9)])
 trnY_L, valY_L, tstY_L = np.split(arr_IE[perm_L], [int(len(arr_IE)*0.8), int(len(arr_IE)*0.9)])
 print(trnY_L.shape)
 
@@ -68,7 +68,7 @@ with model.session:
     model.train(trnX_L=trnX_L, trnXs_L=trnXs_L, trnY_L=trnY_L, trnX_U=trnX_U, trnXs_U=trnXs_U,
                 valX_L=valX_L, valXs_L=valXs_L, valY_L=valY_L, valX_U=valX_U, valXs_U=valXs_U)
     
-    # model.saver.save(model.session, save_uri)
+    model.saver.save(model.session, "./model.ckpt")
     # model.predict_train(x_input=trnX_L,y_input=trnY_L)
     
     # property prediction performance
