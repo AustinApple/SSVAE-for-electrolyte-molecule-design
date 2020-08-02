@@ -27,20 +27,21 @@ class Model(object):
             self.y_L = tf.placeholder(tf.float32, [None, self.dim_y], name="y_L")
 
         ## functions for labeled data
+        #-------- property predictor
         self.classifier_L_out = self._rnnpredictor(self.x_L, self.dim_h, 2*self.dim_y, reuse = False)
         self.y_L_mu, self.y_L_lsgms = tf.split(self.classifier_L_out, [self.dim_y, self.dim_y], 1)
         self.y_L_sample = self._draw_sample(self.y_L_mu, self.y_L_lsgms)
-
+        #-------- encoder 
         self.encoder_L_out = self._rnnencoder(self.x_L, self.y_L, self.dim_h, 2*self.dim_z, reuse = False)
         self.z_L_mu, self.z_L_lsgms = tf.split(self.encoder_L_out, [self.dim_z, self.dim_z], 1)
         self.z_L_sample = self._draw_sample(self.z_L_mu, self.z_L_lsgms)
-
+        #-------- decoder
         self.decoder_L_out = self._rnndecoder(self.xs_L, tf.concat([self.z_L_sample, self.y_L], 1), self.dim_h, self.dim_x, reuse = False)
         self.x_L_recon = tf.nn.softmax(self.decoder_L_out)
-
+        #-------- decoder for validation
         self.decoder_DL_out = self._rnndecoder(self.xs_L, tf.concat([self.z_L_mu, self.y_L], 1), self.dim_h, self.dim_x, reuse = True)
         self.x_DL_recon = tf.nn.softmax(self.decoder_DL_out)
-
+        #-------- decoder for molecular generation
         self.z_G = tf.placeholder(tf.float32, [None, dim_z])
         self.decoder_G_out = self._rnndecoder(self.xs_L, tf.concat([self.z_G, self.y_L], 1), self.dim_h, self.dim_x, reuse = True)
         self.x_G_recon = tf.nn.softmax(self.decoder_G_out)
@@ -52,20 +53,21 @@ class Model(object):
             self.xs_U = tf.placeholder(tf.float32, [None, self.seqlen_x, self.dim_x], name='xs_U')
 
         ## functions for unlabeled data
+        #-------- property predictor
         self.classifier_U_out = self._rnnpredictor(self.x_U, self.dim_h, 2*self.dim_y, reuse = True)
         self.y_U_mu, self.y_U_lsgms = tf.split(self.classifier_U_out, [self.dim_y, self.dim_y], 1)
         self.y_U_sample = self._draw_sample(self.y_U_mu, self.y_U_lsgms)
-
+        #-------- encoder
         self.encoder_U_out = self._rnnencoder(self.x_U, self.y_U_sample, self.dim_h, 2*self.dim_z, reuse = True)
         self.z_U_mu, self.z_U_lsgms = tf.split(self.encoder_U_out, [self.dim_z, self.dim_z], 1)
         self.z_U_sample = self._draw_sample(self.z_U_mu, self.z_U_lsgms)
-
+        #-------- decoder
         self.decoder_U_out = self._rnndecoder(self.xs_U, tf.concat([self.z_U_sample, self.y_U_sample], 1), self.dim_h, self.dim_x, reuse = True)
         self.x_U_recon = tf.nn.softmax(self.decoder_U_out)
-
+        #-------- encoder for validation
         self.encoder_U2_out = self._rnnencoder(self.x_U, self.y_U_mu, self.dim_h, 2*self.dim_z, reuse = True)
         self.z_U2_mu, self.z_U2_lsgms = tf.split(self.encoder_U2_out, [self.dim_z, self.dim_z], 1)
-        
+        #-------- decoder for validation
         self.decoder_DU_out = self._rnndecoder(self.xs_U, tf.concat([self.z_U2_mu, self.y_U_mu], 1), self.dim_h, self.dim_x, reuse = True)
         self.x_DU_recon = tf.nn.softmax(self.decoder_DU_out)
 
@@ -122,14 +124,13 @@ class Model(object):
         summary_objU_val = tf.summary.scalar('objU_val',objU_val)
         summary_objYpred_MSE_val = tf.summary.scalar('objYpred_MSE_val',objYpred_MSE_val)
         
+        summary_merge_trn = tf.summary.merge([summary_cost, summary_objL, summary_objU, summary_objYpred_MSE])
+        summary_merge_val = tf.summary.merge([summary_objL_val, summary_objU_val, summary_objYpred_MSE_val])
+        writer = tf.summary.FileWriter("Tensorboard_test_B_100000/", graph=self.session.graph)
 
 
 
         self.session.run(tf.global_variables_initializer())
-        
-        summary_merge_trn = tf.summary.merge([summary_cost, summary_objL, summary_objU, summary_objYpred_MSE])
-        summary_merge_val = tf.summary.merge([summary_objL_val, summary_objU_val, summary_objYpred_MSE_val])
-        writer = tf.summary.FileWriter("Tensorboard_test_B_100000/", graph=self.session.graph)
 
         # training
         val_log=np.zeros(300)
