@@ -11,7 +11,7 @@ from sklearn.metrics import mean_absolute_error
 import SSVAE
 
 
-beta=100000.
+beta=10000.
  
 # include only fourty 39 characters
 char_set=[" ", "@", "H", "N", "S", "o", "i", "6", "I", "]", "P", "5", ")", "4", "8", "B", "F", 
@@ -23,7 +23,7 @@ char_set=[" ", "@", "H", "N", "S", "o", "i", "6", "I", "]", "P", "5", ")", "4", 
 
 ls_smi_MP = pd.read_csv('MP_clean_canonize_cut.csv')['smiles'].tolist()
 ls_smi_zinc = pd.read_csv('zinc_30W.csv')['smiles'].tolist()
-arr_IE = pd.read_csv('MP_clean_canonize_cut.csv')[['IE','EA']].values
+arr_IE_EA = pd.read_csv('MP_clean_canonize_cut.csv')[['IE','EA']].values
 
 Xs_L, X_L = molecules(ls_smi_MP).one_hot_RNN(char_set=char_set)
 # print(X_L.shape[0],len(ls_smi_MP_new))
@@ -38,14 +38,14 @@ perm_U = np.random.permutation(X_U.shape[0])
 
 trnX_L, valX_L, tstX_L = np.split(X_L[perm_L], [int(len(X_L)*0.8), int(len(X_L)*0.9)])
 trnXs_L, valXs_L, tstXs_L = np.split(Xs_L[perm_L], [int(len(Xs_L)*0.8), int(len(Xs_L)*0.9)])
-trnY_L, valY_L, tstY_L = np.split(arr_IE[perm_L], [int(len(arr_IE)*0.8), int(len(arr_IE)*0.9)])
+trnY_L, valY_L, tstY_L = np.split(arr_IE_EA[perm_L], [int(len(arr_IE_EA)*0.8), int(len(arr_IE_EA)*0.9)])
 print(trnY_L.shape)
 
 trnX_U, valX_U, tstX_U = np.split(X_U[perm_U], [int(len(X_U)*0.8), int(len(X_U)*0.9)])
 trnXs_U, valXs_U, tstXs_U = np.split(Xs_U[perm_U], [int(len(Xs_U)*0.8), int(len(Xs_U)*0.9)])
 
 scaler_Y = StandardScaler()
-scaler_Y.fit(arr_IE)
+scaler_Y.fit(arr_IE_EA)
 trnY_L=scaler_Y.transform(trnY_L)
 valY_L=scaler_Y.transform(valY_L)
 
@@ -69,43 +69,9 @@ with model.session:
                 valX_L=valX_L, valXs_L=valXs_L, valY_L=valY_L, valX_U=valX_U, valXs_U=valXs_U)
     
     model.saver.save(model.session, "./model.ckpt")
-    # model.predict_train(x_input=trnX_L,y_input=trnY_L)
-    
-    # property prediction performance
-   
     tstY_hat=scaler_Y.inverse_transform(model.predict(tstX_L))
-    
-
     for j in range(dim_y):
         print([j, mean_absolute_error(tstY_L[:,j], tstY_hat[:,j])])
 
 
-    # model.reload(trnX_L=trnX_L, trnXs_L=trnXs_L, trnY_L=trnY_L, trnX_U=trnX_U, trnXs_U=trnXs_U,
-    #             valX_L=valX_L, valXs_L=valXs_L, valY_L=valY_L, valX_U=valX_U, valXs_U=valXs_U)
-    
-    # model.predict_train(x_input=trnX_L,y_input=trnY_L)
-    # tstY_hat=scaler_Y.inverse_transform(model.predict(tstX))
-    
-    # for j in range(dim_y):
-    #     print([j, mean_absolute_error(tstY[:,j], tstY_hat[:,j])])
-        
-        
-    # ## unconditional generation
-    # for t in range(10):
-    #     smi = model.sampling_unconditional()
-    #     print([t, smi])
-    #     # print([t, smi, get_property(smi)])
-    
-    # ## conditional generation (e.g. MolWt=250)
-    # yid = 0
-    # ytarget = 5.0
-    # ytarget_transform = (ytarget-scaler_Y.mean_[yid])/np.sqrt(scaler_Y.var_[yid])
-    
-    # print('this is for conditional sampling')
-
-    # for t in range(100):
-
-    #     smi = model.sampling_conditional(yid, ytarget_transform)
-        
-    #     # print([t, smi, get_property(smi)])
-    #     print([t, smi])
+   
